@@ -7,3 +7,6 @@ git_os**
 checkpoints**
 *.txt
 __pycache__/**
+*.zip
+submission**/**
+package_git_tracked.py
