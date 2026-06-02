@@ -6,3 +6,4 @@ old**
 git_os**
 checkpoints**
 *.txt
+__pycache__/**
