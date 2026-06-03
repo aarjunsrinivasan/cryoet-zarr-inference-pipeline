@@ -1,0 +1,8 @@
+git_os/**
+data**/**
+output**/**
+lightning_logs**
+old**
+git_os**
+checkpoints**
+*.txt
