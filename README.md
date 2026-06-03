@@ -256,31 +256,6 @@ Synthetic training data has kurtosis ≈ 30: mostly empty resin background with 
 
 *Panels left to right: (1) In-situ raw reconstruction density — negative values are physically expected in CTF-corrected WBP tomograms (high electron density ↔ negative voxel values), mean/std/var shown. (2) Synthetic raw reconstruction density — separate panel on its own scale (~6 orders of magnitude different from in-situ). (3) z-score normalised distributions on log scale — synthetic heavy tail extends to −7σ, in-situ is compact and near-Gaussian. (4) Max prediction confidence per class — all six classes explicitly shown with short labels; ribosome bar annotated with its value (~0.0004), two orders of magnitude below the lowest threshold.*
 
-<<<<<<< HEAD
-=======
-#### 3. Model outputs at known ribosome positions
-
-To confirm the model's internal representation also fails, we ran it on individual 96³ patches centred at GT ribosome coordinates and read the full per-class softmax probability map.
-
-![Ribosome channel stats](output/inference_2c/ribosome_channel_stats.png)
-
-*Per-class softmax at the centre voxel of GT ribosome patches. In-situ (left): background channel dominates, ribosome probability is indistinguishable from zero. Synthetic (right): ribosome channel should carry clear probability mass when patches are extracted from the full-volume-normalised array (matching the inference pipeline), confirming the model works in-distribution but its feature representation does not transfer to in-situ data.*
-
-![Ribosome patch comparison](output/inference_2c/ribosome_patch_comparison.png)
-
-*Ribosome-channel softmax mid-slice for 96³ patches. Left: in-situ at GT positions — uniformly near zero. Centre: in-situ background patches — indistinguishable from GT patches. Right: synthetic GT patches — a clear localised peak at the particle centre.*
-
-#### 4. Spatial failure pattern
-
-![FN/FP analysis](output/inference_2c/fn_fp_analysis.png)
-
-*At threshold 0.19: all 56 GT ribosomes are false negatives (red), zero predictions made. The FN scatter shows ribosomes uniformly distributed through the volume — the failure is global, not concentrated at a specific depth or region.*
-
-![Ribosome confidence map](output/inference_2c/ribosome_confidence_map.png)
-
-*Max-Z-projection heatmap of all 1 209 ribosome candidates (no threshold). Spatial pattern is noise-like with no alignment to GT positions (cyan crosses). All 1 209 candidates have confidence < 0.001.*
->>>>>>> b48af11 (task2c results and explanations part1)
-
 ### Differences between synthetic and in-situ settings
 
 | Factor | Synthetic lysate (training) | In-situ Chlamydomonas (test) |
@@ -304,8 +279,3 @@ To confirm the model's internal representation also fails, we ran it on individu
 | `output/inference_2c/slice_comparison.png` | XY slices at ribosome-richest z-depths (all panels guaranteed ≥1 ribosome visible) with GT overlays — in-situ vs synthetic |
 =======
 | `output/inference_2c/slice_comparison.png` | XY slices at ribosome-richest z-depths (all panels guaranteed ≥1 ribosome visible) with GT overlays — in-situ vs synthetic |
-| `output/inference_2c/fn_fp_analysis.png` | FN/FP spatial scatter (x/y vs z) + depth histogram |
-| `output/inference_2c/ribosome_channel_stats.png` | Per-class softmax at GT positions: background dominates in-situ, ribosome channel fires in synthetic |
-| `output/inference_2c/ribosome_patch_comparison.png` | Ribosome-channel softmax mid-slice for GT/background/synthetic patches |
-| `output/inference_2c/ribosome_confidence_map.png` | Max-projection heatmap of all unthresholded predictions + confidence histogram |
->>>>>>> b48af11 (task2c results and explanations part1)
