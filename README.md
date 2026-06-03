@@ -310,3 +310,57 @@ This is the most direct evidence of the domain gap: the model's ribosome detecto
 | `output/inference_2c/ferritin_ribosome_synthetic.png` | Synthetic 16463 slices with ferritin (gold, r=60 Å) and ribosome (lime, r=150 Å) GT overlaid — shows both as compact blobs on resin background |
 | `output/inference_2c/performance_summary.png` | Left: PR curve overlay (synthetic working curve vs in-situ collapse to origin). Right: per-class mean max-confidence at GT ribosome positions — ferritin channel leads in-situ, ribosome channel leads synthetic |
 | `output/inference_2c/ribosome_patch_comparison.png` | 96³ patch ribosome-channel softmax mid-slices: in-situ GT positions vs in-situ background vs synthetic GT positions — GT and background patches are indistinguishable in-situ |
+
+---
+
+## Task 2d — Proposal: Improving Performance on Chlamydomonas
+
+The Task 2c results identify three quantified failure modes; the proposals below treat each as a working hypothesis and propose concrete interventions to test them.
+
+### Observed failure modes (from Task 2c)
+
+1. **Distribution mismatch** — post-z-score kurtosis 30.4 (synthetic) vs 0.6 (in-situ). The model appears to act as an outlier detector; dense cytoplasm may be erasing the sparse high-contrast signatures it learned on.
+2. **Complete detection collapse** — F4 = 0.000 across all thresholds 0.05–0.70; max ribosome confidence = 0.0004. GT-centred and background patches produce the same ribosome-channel response (max ≈ 0.002–0.16 in both cases).
+3. **Class confusion** — ferritin channel fires ≈60× stronger than ribosome at GT ribosome positions (≈10⁻³ vs ≈10⁻⁶). One likely cause: both are compact blobs and the model may have learned to separate them by contrast rather than size.
+
+### 1. Augment synthetic training toward the in-situ regime
+
+**Background copy-paste mixing.** Extract background sub-volumes from run 14070 (regions >300 Å from any GT annotation) and composite synthetic ribosome density into them:
+
+```
+composite = α * synthetic_particle + (1 − α) * insitu_background_crop,  α ~ Uniform(0.7, 1.0)
+```
+
+In-situ background crops have kurtosis ≈ 0.6 by construction; this targets the distribution gap without re-simulating data. Hard negatives should be sampled from ferritin-channel NMS peaks in the in-situ volume, given the observed class confusion.
+
+**CTF and missing-wedge augmentation.** The 22% voxel-size difference (10.012 Å → 7.84 Å) and real-acquisition CTF may contribute to the appearance mismatch. Rescale synthetic crops by factor 1.278 (`scipy.ndimage.zoom`). Apply a ±30° missing-wedge mask in Fourier space (`torch.fft.fftn` → zero wedge → `torch.fft.ifftn`). For CTF, [Parakeet](https://github.com/rosalindfranklininstitute/parakeet) can regenerate synthetic volumes with defocus and dose parameters estimated from the real acquisition.
+
+### 2. Fine-tune on a small human-reviewed in-situ set
+
+Augmentation alone may not be sufficient; real in-situ examples are likely needed to address failure modes 2 and 3. Split run 14070 by z-slab (not random — nearby ribosomes share local context and would leak across a random split). Fine-tune the TopCUP decoder/head first; unfreeze earlier layers only if held-out F4 improves. Sample hard negatives from ferritin-channel NMS peaks.
+
+Annotation loop:
+1. Run adapted model at low threshold → candidate centers.
+2. Review in copick/napari; accept, reject, or adjust.
+3. Add accepted as positives, high-confidence rejects as hard negatives.
+4. Retrain; repeat until held-out F4 and annotation burden plateau.
+
+### 3. Denoising pre-processing
+
+The in-situ input ("wbp-denoised-ctfdeconv") has already been denoised, but the specific denoiser may differ from what TopCUP trained on. Testing alternatives is a zero-label intervention. Selection criterion: whichever denoiser raises ribosome-channel confidence at held-out GT positions (measured with the patch-probing protocol from Task 2c).
+
+- **TOPAZ-Denoise** ([github.com/tbepler/topaz](https://github.com/tbepler/topaz), `pip install topaz-em`): standalone, pre-trained 3D models, no retraining needed (Bepler et al., Nature Comms 2020).
+- **CryoCARE** ([github.com/juglab/cryoCARE_pip](https://github.com/juglab/cryoCARE_pip)): Noise2Noise, requires even/odd frame reconstructions (`MotionCor2 -SplitSum 1`).
+- **IsoNet** ([github.com/IsoNet-cryoET/IsoNet](https://github.com/IsoNet-cryoET/IsoNet)): self-supervised on already-reconstructed tomograms, reported to improve picking on in-situ cellular data (Liu et al., Nature Comms 2022). Note: missing-wedge infilling may introduce hallucinations — use for picking only, not structure determination.
+
+### 4. CryoSiam-assisted candidate prioritization
+
+[CryoSiam](https://github.com/frosinastojanovska/cryosiam) provides self-supervised subtomogram embeddings without particle labels. After TopCUP inference yields 1,209 NMS candidates all below confidence 0.002 and spatially uncorrelated with GT, extract embeddings at each candidate position and cluster them. Clusters most similar in embedding space to GT-confirmed ribosomes from run 16463 are prioritised for human review, reducing the annotation burden per verified positive.
+
+### 5. Evaluation
+
+**Detection and localization (same as Tasks 2b/2c):** precision, recall, F4 at operating threshold, best-F4 over sweep 0.05–0.70, mean TP localization distance (Å). Evaluated on spatially held-out z-slab labels only. Report per annotation-loop iteration to track marginal return.
+
+**Candidates per chunk at fixed recall** — measures annotation efficiency: a useful tool should reduce candidates/TP, not just improve aggregate F4.
+
+**Sub-tomogram averaging (STA) FSC** — take TP detections → extract subtomograms → compute FSC between two half-sets via EMAN2 (`e2proc3d.py --calcfsc`) or RELION-5 (`relion_postprocess`). With 202 GT ribosomes in run 14070, benchmarks suggest FSC-0.143 ≈ 15–20 Å is achievable (DeepETPicker, Nature Comms 2024, uses this as a picker comparison metric). Crucially, a pick set contaminated by ferritin-channel false positives would produce an averaged map resembling ferritin (~120 Å diameter) rather than the 80S ribosome, providing a qualitative structural sanity check independent of the F4 threshold sweep.
