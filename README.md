@@ -203,7 +203,7 @@ python run_inference_2c.py \
   --gt-user-id     data-portal \
   --results-2b     output/inference_2b/results_default_threshold.csv
 
-# Step 2: domain gap + spatial failure figures
+# Step 2: diagnostic figures (domain gap, slice comparison, class confusion, PR curve, ferritin viz)
 python generate_figures_2c.py
 
 # Step 3: model-output evidence figures (loads the model; ~20 patch forward passes)
@@ -256,6 +256,48 @@ Synthetic training data has kurtosis ≈ 30: mostly empty resin background with 
 
 *Panels left to right: (1) In-situ raw reconstruction density — negative values are physically expected in CTF-corrected WBP tomograms (high electron density ↔ negative voxel values), mean/std/var shown. (2) Synthetic raw reconstruction density — separate panel on its own scale (~6 orders of magnitude different from in-situ). (3) z-score normalised distributions on log scale — synthetic heavy tail extends to −7σ, in-situ is compact and near-Gaussian. (4) Max prediction confidence per class — all six classes explicitly shown with short labels; ribosome bar annotated with its value (~0.0004), two orders of magnitude below the lowest threshold.*
 
+#### 3. Class confusion and precision–recall collapse
+
+The model does not fail uniformly across all output channels at ribosome locations. For each GT ribosome position, the maximum confidence of each class's NMS peaks within 75 Å (the CZII matching radius) was computed and averaged across all 56 GT ribosomes in the chunk (in-situ) and all 31 in run 16463 (synthetic):
+
+| Channel | Mean max-conf at GT ribosomes — in-situ | Mean max-conf at GT ribosomes — synthetic |
+|---|---|---|
+| ferritin-complex | **~10⁻³** (highest) | ~10⁻² |
+| cytosolic-ribosome | ~10⁻⁶ | **~1.0** (correct) |
+| all other classes | ~10⁻⁵–10⁻⁶ | ~10⁻³–10⁻⁴ |
+
+At known ribosome locations in-situ, the ferritin channel produces a response **~60× stronger** than the ribosome channel. The model's blob detector is misfiring onto the wrong class rather than suppressing uniformly. Both ferritin (~120 Å diameter) and ribosome (~300 Å diameter) are compact spherical density blobs — in the sparse synthetic setting the model can distinguish them by size and contrast; in the uniform in-situ cytoplasm the weak residual signal more closely resembles the smaller ferritin signature.
+
+![Performance summary](output/inference_2c/performance_summary.png)
+
+*Left: Precision–Recall curves for cytosolic-ribosome. Synthetic 16463 achieves a working operating point (F4=0.814 at th=0.19); the in-situ 14070 chunk collapses to a single red ✕ at the origin — zero detections at every threshold from 0.05 to 0.70. Right: mean max confidence of each class at GT ribosome positions. In synthetic (coral) the ribosome bar correctly dominates at ~1.0; in-situ (blue) the ferritin bar leads at ~10⁻³, with ribosome an order of magnitude lower at ~10⁻⁶.*
+
+The figure below shows both particle species in the synthetic volume, confirming they share the same compact-blob appearance. In this low-background setting the model has enough contrast to separate them by size; that contrast disappears entirely in the crowded in-situ cytoplasm.
+
+![Ferritin and ribosome in synthetic](output/inference_2c/ferritin_ribosome_synthetic.png)
+
+*Synthetic 16463 — three z-slices chosen to maximise co-visibility of both species (separation ≥ 15 % of volume depth). Gold circles: ferritin GT centres (r=60 Å, ~120 Å diameter); lime circles: ribosome GT centres (r=150 Å, ~300 Å diameter). On the near-empty resin background both produce clear, isolated density dips whose size difference is the primary discriminating feature.*
+
+#### 4. Patch-level softmax: GT positions vs background are indistinguishable in-situ
+
+To directly probe what the model "sees" at a known ribosome location, individual 96³ patches were extracted at GT ribosome centres and at random background positions (>300 Å from any GT), pre-normalised identically to full-volume inference, and passed through the model. The mid-slice of the ribosome-channel softmax probability map is shown for each:
+
+![Patch comparison](output/inference_2c/ribosome_patch_comparison.png)
+
+*Three columns: (left) in-situ chunk patches centred on GT ribosomes; (middle) in-situ chunk patches at random background positions; (right) synthetic 16463 patches centred on GT ribosomes. Colour scale = ribosome-channel softmax probability; top value = patch maximum. In-situ GT patches (left) and in-situ background patches (middle) are visually and numerically indistinguishable — both max out at ~0.002–0.16 with no localised bright structure. Synthetic GT patches (right) show at least one patch with a clear localised blob at max ≈ 0.78; the rest range from 0.003 to 0.12 but are spatially structured. The model cannot tell a ribosome location from random cytoplasm in the in-situ setting.*
+
+This is the most direct evidence of the domain gap: the model's ribosome detector produces the same featureless, near-zero response at actual ribosome positions as it does at empty cytoplasm. There is no localised "hot spot" to threshold.
+
+#### 5. Spatial confidence map: weak signal is random, not anchored to GT positions
+
+The full sliding-window inference produces 1 209 NMS-surviving ribosome candidate points before any threshold is applied. Their spatial distribution is visualised below as a max-Z-projection confidence heatmap alongside the confidence histogram:
+
+![Confidence map](output/inference_2c/ribosome_confidence_map.png)
+
+*Left: max-Z-projection of ribosome-channel confidence across the chunk footprint. Cyan crosses mark the 56 GT ribosome positions. The heatmap is uniformly near-black (max confidence anywhere = 0.0004); no pixel is noticeably brighter near a GT cross than elsewhere — the weak predictions are spatially diffuse and uncorrelated with actual ribosome positions. Right: confidence histogram of all 1 209 predictions (log y-axis). Every single prediction clusters below 0.002; the threshold lines at 0.05 (dotted) and 0.19 (dashed) are far off to the right, confirming zero detections survive any reasonable threshold.*
+
+The spatial randomness of the weak signal rules out the alternative hypothesis that the model is "almost finding" ribosomes but just undershooting the threshold. The model has no systematic spatial response at ribosome locations at all.
+
 ### Differences between synthetic and in-situ settings
 
 | Factor | Synthetic lysate (training) | In-situ Chlamydomonas (test) |
@@ -276,3 +318,7 @@ Synthetic training data has kurtosis ≈ 30: mostly empty resin background with 
 | `output/inference_2c/ribosome_pr_curve.csv` | Full P/R curve sweep 0.05–0.70 |
 | `output/inference_2c/domain_gap_analysis.png` | 4-panel: in-situ raw intensity (own scale, mean/std in title), synthetic raw intensity (own scale), z-score normalised overlay (log), per-class max confidence with ribosome annotated |
 | `output/inference_2c/slice_comparison.png` | XY slices at ribosome-richest z-depths (all panels guaranteed ≥1 ribosome visible) with GT overlays — in-situ vs synthetic |
+| `output/inference_2c/ferritin_ribosome_synthetic.png` | Synthetic 16463 slices with ferritin (gold, r=60 Å) and ribosome (lime, r=150 Å) GT overlaid — shows both as compact blobs on resin background |
+| `output/inference_2c/performance_summary.png` | Left: PR curve overlay (synthetic working curve vs in-situ collapse to origin). Right: per-class mean max-confidence at GT ribosome positions — ferritin channel leads in-situ, ribosome channel leads synthetic |
+| `output/inference_2c/ribosome_patch_comparison.png` | 96³ patch ribosome-channel softmax mid-slices: in-situ GT positions vs in-situ background vs synthetic GT positions — GT and background patches are indistinguishable in-situ |
+| `output/inference_2c/ribosome_confidence_map.png` | Left: max-Z-projection heatmap of all 1 209 sub-threshold ribosome predictions with GT overlaid (spatially random, no clustering at GT positions). Right: confidence histogram — all predictions < 0.002 |
