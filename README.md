@@ -286,28 +286,17 @@ To directly probe what the model "sees" at a known ribosome location, individual
 
 *Three columns: (left) in-situ chunk patches centred on GT ribosomes; (middle) in-situ chunk patches at random background positions; (right) synthetic 16463 patches centred on GT ribosomes. Colour scale = ribosome-channel softmax probability; top value = patch maximum. In-situ GT patches (left) and in-situ background patches (middle) are visually and numerically indistinguishable — both max out at ~0.002–0.16 with no localised bright structure. Synthetic GT patches (right) show at least one patch with a clear localised blob at max ≈ 0.78; the rest range from 0.003 to 0.12 but are spatially structured. The model cannot tell a ribosome location from random cytoplasm in the in-situ setting.*
 
-This is the most direct evidence of the domain gap: the model's ribosome detector produces the same featureless, near-zero response at actual ribosome positions as it does at empty cytoplasm. There is no localised "hot spot" to threshold.
-
-#### 5. Spatial confidence map: weak signal is random, not anchored to GT positions
-
-The full sliding-window inference produces 1 209 NMS-surviving ribosome candidate points before any threshold is applied. Their spatial distribution is visualised below as a max-Z-projection confidence heatmap alongside the confidence histogram:
-
-![Confidence map](output/inference_2c/ribosome_confidence_map.png)
-
-*Left: max-Z-projection of ribosome-channel confidence across the chunk footprint. Cyan crosses mark the 56 GT ribosome positions. The heatmap is uniformly near-black (max confidence anywhere = 0.0004); no pixel is noticeably brighter near a GT cross than elsewhere — the weak predictions are spatially diffuse and uncorrelated with actual ribosome positions. Right: confidence histogram of all 1 209 predictions (log y-axis). Every single prediction clusters below 0.002; the threshold lines at 0.05 (dotted) and 0.19 (dashed) are far off to the right, confirming zero detections survive any reasonable threshold.*
-
-The spatial randomness of the weak signal rules out the alternative hypothesis that the model is "almost finding" ribosomes but just undershooting the threshold. The model has no systematic spatial response at ribosome locations at all.
+This is the most direct evidence of the domain gap: the model's ribosome detector produces the same featureless, near-zero response at actual ribosome positions as it does at empty cytoplasm. There is no localised "hot spot" to threshold. Across the full sliding-window inference, 1,209 NMS-surviving ribosome candidates are produced before any threshold is applied — every one falls below 0.002 confidence, and their spatial distribution is uncorrelated with GT positions, ruling out the hypothesis that the model is "almost finding" ribosomes but undershooting the threshold.
 
 ### Differences between synthetic and in-situ settings
 
 | Factor | Synthetic lysate (training) | In-situ Chlamydomonas (test) |
 |---|---|---|
-| Cellular context | Sparse, isolated particles in resin | Crowded cytoplasm; ribosomes in polysomes and on ER membranes |
+| Cellular context | Sparse, isolated particles in featureless simulated medium | Crowded cytoplasm; ribosomes in polysomes and on ER membranes |
 | Intensity distribution | Sparse background + extreme outlier peaks; kurtosis ≈ 30 | Dense, near-Gaussian; kurtosis ≈ 0.6 |
-| Noise | Simulation noise model | Real CTF artefacts, beam-induced motion, sample-specific background |
-| Voxel size | 10.012 Å | 7.84 Å — model rescales internally, but this range may be outside training augmentation |
-| Ribosome appearance | Isolated in solution; clean density blob | In polysome/ER context; neighbouring densities overlap the ribosome signal |
-| Background | Simple resin | Membranes, organelles, cytoskeletal elements |
+| Acquisition | Computationally simulated | Real cryo-ET: CTF artefacts, beam-induced motion |
+| Voxel size | 10.012 Å | 7.84 Å |
+| Background complexity | Empty medium | Membranes, organelles, cytoskeletal elements |
 
 ### Output files
 
@@ -321,4 +310,3 @@ The spatial randomness of the weak signal rules out the alternative hypothesis t
 | `output/inference_2c/ferritin_ribosome_synthetic.png` | Synthetic 16463 slices with ferritin (gold, r=60 Å) and ribosome (lime, r=150 Å) GT overlaid — shows both as compact blobs on resin background |
 | `output/inference_2c/performance_summary.png` | Left: PR curve overlay (synthetic working curve vs in-situ collapse to origin). Right: per-class mean max-confidence at GT ribosome positions — ferritin channel leads in-situ, ribosome channel leads synthetic |
 | `output/inference_2c/ribosome_patch_comparison.png` | 96³ patch ribosome-channel softmax mid-slices: in-situ GT positions vs in-situ background vs synthetic GT positions — GT and background patches are indistinguishable in-situ |
-| `output/inference_2c/ribosome_confidence_map.png` | Left: max-Z-projection heatmap of all 1 209 sub-threshold ribosome predictions with GT overlaid (spatially random, no clustering at GT positions). Right: confidence histogram — all predictions < 0.002 |
