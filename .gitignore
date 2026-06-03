@@ -1,6 +1,6 @@
 git_os/**
 data**/**
-output**/**
+# output**/**
 lightning_logs**
 old**
 git_os**

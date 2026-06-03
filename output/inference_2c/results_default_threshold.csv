@@ -1,0 +1,2 @@
+particle_type,threshold,tp,fp,fn,n_gt,n_pred,precision,recall,f4,avg_tp_dist_A
+cytosolic-ribosome,0.19,0,0,56,56,0,0.0,0.0,0.0,
