@@ -345,6 +345,8 @@ The Task 2c results identify three quantified failure modes; the proposals below
 2. **Complete detection collapse** — F4 = 0.000 across all thresholds 0.05–0.70; max ribosome confidence = 0.0004. GT-centred and background patches produce the same ribosome-channel response (max ≈ 0.002–0.16 in both cases).
 3. **Class confusion** — ferritin channel fires ≈500× stronger than ribosome at GT ribosome positions (≈10⁻³ vs ≈2×10⁻⁶). One likely cause: both are compact blobs and the model may have learned to separate them by contrast rather than size.
 
+**Suggested order:** try section 3 (denoising swap) first as a zero-label baseline; if ribosome-channel confidence at GT positions does not improve, proceed to section 1 (augmentation); section 2 (fine-tuning) requires section 1's adapted model as its starting point; section 4 (CryoSiam ranking) can run in parallel with section 2 to prioritise the annotation queue.
+
 ### 1. Augment synthetic training toward the in-situ regime
 
 **Background copy-paste mixing.** Extract background sub-volumes from run 14070 (regions >300 Å from any GT annotation) and composite synthetic ribosome density into them:
@@ -361,7 +363,7 @@ In-situ background crops have kurtosis ≈ 0.7 by construction; this targets the
 
 *Missing-wedge mask.* Apply a wedge-shaped zero mask in Fourier space (`torch.fft.fftn` → zero wedge → `torch.fft.ifftn`). The half-angle of the missing wedge is dataset-specific and must be read from the 14070 tilt series metadata (STAR or MDOC file): `half_angle = 90° − max_tilt`. A ±30° wedge corresponds to a ±60° maximum tilt, which is a common acquisition range, but this should be verified before use rather than assumed.
 
-*CTF simulation.* [Parakeet](https://github.com/rosalindfranklininstitute/parakeet) can simulate CTF on synthetic sub-volumes. It requires the defocus value and electron dose for each tilt image in the 14070 series; these are not present in the downloaded data and would need to be fetched from the associated tilt series files or the EMDB deposition.
+*CTF simulation* (e.g. Parakeet) is possible in principle but requires per-tilt defocus/dose metadata not present in the downloaded data; treat as a stretch goal after the above augmentations have been validated.
 
 ### 2. Fine-tune on a small human-reviewed in-situ set
 
@@ -369,7 +371,7 @@ Augmentation alone may not be sufficient; real in-situ examples are likely neede
 
 Annotation loop:
 
-*Bootstrap (iteration 0):* The loop assumes the augmentation-adapted model from section 1 already provides non-trivial ribosome candidates. If augmentation alone still leaves confidence near zero everywhere, seed the initial candidate list via template matching — e.g. [GAPSTOP TM](https://gitlab.mpcdf.mpg.de/bturo/gapstop_tm) against an 80S ribosome reference from EMDB (EMD-2275 is a well-resolved cytosolic 80S at ~6 Å; verify organism match before use). Template-match scores are noisy and cannot substitute for GT (as the task specifies), but they provide a spatially plausible shortlist that reduces the cold-start annotation burden before the model has seen any in-situ positives.
+*Bootstrap (iteration 0):* The loop assumes the augmentation-adapted model from section 1 already provides non-trivial ribosome candidates. If augmentation alone still leaves confidence near zero everywhere, seed the initial candidate list via template matching — e.g. [GAPSTOP TM](https://gitlab.mpcdf.mpg.de/bturo/gapstop_tm) against an 80S ribosome reference from EMDB (e.g. EMD-2275, a cytosolic 80S; verify organism match and resolution before use). Template-match scores are noisy and cannot substitute for GT (as the task specifies), but they provide a spatially plausible shortlist that reduces the cold-start annotation burden before the model has seen any in-situ positives.
 
 1. Run adapted model at low threshold → candidate centers.
 2. Review in copick/napari; accept, reject, or adjust.
@@ -380,9 +382,8 @@ Annotation loop:
 
 The in-situ input ("wbp-denoised-ctfdeconv") has already been denoised, but the specific denoiser may differ from what TopCUP trained on. Testing alternatives is a zero-label intervention. Selection criterion: whichever denoiser raises ribosome-channel confidence at held-out GT positions (measured with the patch-probing protocol from Task 2c).
 
-- **TOPAZ-Denoise** ([github.com/tbepler/topaz](https://github.com/tbepler/topaz), `pip install topaz-em`): standalone, pre-trained 3D models, no retraining needed (Bepler et al., Nature Comms 2020).
-- **CryoCARE** ([github.com/juglab/cryoCARE_pip](https://github.com/juglab/cryoCARE_pip)): Noise2Noise, requires even/odd frame reconstructions (`MotionCor2 -SplitSum 1`).
 - **IsoNet** ([github.com/IsoNet-cryoET/IsoNet](https://github.com/IsoNet-cryoET/IsoNet)): self-supervised on already-reconstructed tomograms, reported to improve picking on in-situ cellular data (Liu et al., Nature Comms 2022). Note: missing-wedge infilling may introduce hallucinations — use for picking only, not structure determination.
+- **TOPAZ-Denoise** ([github.com/tbepler/topaz](https://github.com/tbepler/topaz), `pip install topaz-em`): standalone, pre-trained 3D models, no retraining needed (Bepler et al., Nature Comms 2020).
 
 ### 4. Self-supervised subtomogram embedding for candidate prioritization
 
