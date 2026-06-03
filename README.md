@@ -205,9 +205,6 @@ python run_inference_2c.py \
 
 # Step 2: domain gap + spatial failure figures
 python generate_figures_2c.py
-
-# Step 3: model-output evidence figures (loads the model; ~20 patch forward passes)
-python visualize_model_output_2c.py
 ```
 
 `run_inference_2c.py` extracts the chunk (x=160, y=752, 256×256, full z), builds a chunk-local copick config with coordinate-shifted GT picks, runs inference with the same checkpoint as Task 2b, and saves the metric CSVs. The two figure scripts read from the saved outputs and do not re-run inference.
