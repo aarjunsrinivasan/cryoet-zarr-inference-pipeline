@@ -253,7 +253,7 @@ The most direct evidence of the domain gap: the z-slices below are picked at the
 
 ![Slice comparison](output/inference_2c/slice_comparison.png)
 
-*Top row (in-situ chunk, run 14070): the three panels are the ribosome-richest sections; z-coordinates are printed in each title. Ribosomes are embedded in dense, continuous cytoplasm — their density signature is indistinguishable from the surrounding material at a glance. Bottom row (synthetic, run 16463): the same selection criterion applied to the synthetic volume. Particles are sparse, well-separated, and sit on a nearly empty resin background — the visual contrast that the model was trained to detect.*
+*Top row (in-situ chunk, run 14070): the three panels are the ribosome-richest sections; z-coordinates are printed in each title. Ribosomes are embedded in dense, continuous cytoplasm — their density signature is indistinguishable from the surrounding material at a glance. Bottom row (synthetic, run 16463): the same selection criterion applied to the synthetic volume. Particles are sparse, well-separated, and sit on a nearly empty featureless background — the visual contrast that the model was trained to detect.*
 
 This difference already explains the failure qualitatively: in-situ ribosomes do not produce the localised, high-contrast density blobs the model learned to trigger on.
 
@@ -272,7 +272,7 @@ Both datasets are z-score normalised before the model (`NormalizeIntensityd`). T
 | **Post z-score kurtosis (excess)** | **0.7** | **30.4** |
 | **Post z-score skewness** | −0.13 | −3.00 |
 
-Synthetic training data has kurtosis ≈ 30: mostly empty resin background with a few dense, well-separated particles creating extreme negative-tail outliers. The model learned to detect those outlier signatures. The in-situ chunk has kurtosis ≈ 0.7 (essentially Gaussian): crowded cytoplasm fills the volume uniformly, erasing the outlier peaks the model relies on. Every voxel looks like background to the model.
+Synthetic training data has kurtosis ≈ 30: mostly empty featureless background with a few dense, well-separated particles creating extreme negative-tail outliers. The model learned to detect those outlier signatures. The in-situ chunk has kurtosis ≈ 0.7 (essentially Gaussian): crowded cytoplasm fills the volume uniformly, erasing the outlier peaks the model relies on. Every voxel looks like background to the model.
 
 ![Domain gap analysis](output/inference_2c/domain_gap_analysis.png)
 
@@ -298,7 +298,7 @@ The figure below shows both particle species in the synthetic volume, confirming
 
 ![Ferritin and ribosome in synthetic](output/inference_2c/ferritin_ribosome_synthetic.png)
 
-*Synthetic 16463 — three z-slices chosen to maximise co-visibility of both species (separation ≥ 15 % of volume depth). Gold circles: ferritin GT centres (r=60 Å, ~120 Å diameter); lime circles: ribosome GT centres (r=150 Å, ~300 Å diameter). On the near-empty resin background both produce clear, isolated density dips whose size difference is the primary discriminating feature.*
+*Synthetic 16463 — three z-slices chosen to maximise co-visibility of both species (separation ≥ 15 % of volume depth). Gold circles: ferritin GT centres (r=60 Å, ~120 Å diameter); lime circles: ribosome GT centres (r=150 Å, ~300 Å diameter). On the near-empty featureless background both produce clear, isolated density dips whose size difference is the primary discriminating feature.*
 
 #### 4. Patch-level softmax: GT positions vs background are indistinguishable in-situ
 
@@ -314,7 +314,7 @@ This is the most direct evidence of the domain gap: the model's ribosome detecto
 
 | Factor | Synthetic lysate (training) | In-situ Chlamydomonas (test) |
 |---|---|---|
-| Cellular context | Sparse, isolated particles in featureless simulated medium | Crowded cytoplasm; ribosomes in polysomes and on ER membranes |
+| Cellular context | Sparse, isolated particles in featureless simulated medium | Crowded cytoplasm; particles densely packed with no clear background |
 | Intensity distribution | Sparse background + extreme outlier peaks; kurtosis ≈ 30 | Dense, near-Gaussian; kurtosis ≈ 0.7 |
 | Acquisition | Computationally simulated | Real cryo-ET: CTF artefacts, beam-induced motion |
 | Voxel size | 10.012 Å | 7.84 Å |
@@ -365,9 +365,12 @@ In-situ background crops have kurtosis ≈ 0.7 by construction; this targets the
 
 ### 2. Fine-tune on a small human-reviewed in-situ set
 
-Augmentation alone may not be sufficient; real in-situ examples are likely needed to address failure modes 2 and 3. Split run 14070 by z-slab (not random — nearby ribosomes share local context and would leak across a random split). Fine-tune the TopCUP decoder/head first; unfreeze earlier layers only if held-out F4 improves. Sample hard negatives from ferritin-channel NMS peaks.
+Augmentation alone may not be sufficient; real in-situ examples are likely needed to address failure modes 2 and 3. Split run 14070 by z-slab (not random — nearby ribosomes share local context and would leak across a random split). Fine-tune the TopCUP decoder/head first; unfreeze earlier layers only if held-out F4 improves. Oversample hard negatives to counteract the inherent particle/background class imbalance in any sparse-particle setting; in this specific case the class confusion analysis (failure mode 3) identifies ferritin-channel NMS peaks as the highest-priority hard negative source.
 
 Annotation loop:
+
+*Bootstrap (iteration 0):* The loop assumes the augmentation-adapted model from section 1 already provides non-trivial ribosome candidates. If augmentation alone still leaves confidence near zero everywhere, seed the initial candidate list via template matching — e.g. [GAPSTOP TM](https://gitlab.mpcdf.mpg.de/bturo/gapstop_tm) against an 80S ribosome reference from EMDB (EMD-2275 is a well-resolved cytosolic 80S at ~6 Å; verify organism match before use). Template-match scores are noisy and cannot substitute for GT (as the task specifies), but they provide a spatially plausible shortlist that reduces the cold-start annotation burden before the model has seen any in-situ positives.
+
 1. Run adapted model at low threshold → candidate centers.
 2. Review in copick/napari; accept, reject, or adjust.
 3. Add accepted as positives, high-confidence rejects as hard negatives.
@@ -383,12 +386,14 @@ The in-situ input ("wbp-denoised-ctfdeconv") has already been denoised, but the 
 
 ### 4. Self-supervised subtomogram embedding for candidate prioritization
 
-[CryoSiam](https://github.com/frosinastojanovska/cryosiam) provides self-supervised subtomogram embeddings without particle labels. After TopCUP inference yields 1,209 NMS candidates all below confidence 0.002 and spatially uncorrelated with GT, extract embeddings at each candidate position and cluster them. Clusters most similar in embedding space to GT-confirmed ribosomes from run 16463 are prioritised for human review, reducing the annotation burden per verified positive.
+[CryoSiam](https://github.com/frosinastojanovska/cryosiam) provides self-supervised subtomogram embeddings trained on raw density patterns without particle labels. Its value here is precisely because model confidence is uniformly near-zero and spatially uninformative (Task 2c): confidence-based candidate ranking has collapsed entirely, but raw appearance may still carry shape signal that the model's softmax has lost. Train CryoSiam on the in-situ tomogram itself; use GT ribosome subtomograms from run 16463 as embedding anchors to rank the 1,209 NMS-surviving candidates by embedding distance. This shortlists the annotation workload for step 2 of the loop above — a human reviews the top-ranked candidates first rather than sampling randomly from 1,209 positions.
+
+**Caveat:** domain gap may also affect the embedding space; CryoSiam was developed on purified single-particle data, not crowded cytoplasm. Validate the ranking before relying on it: if the embedding-ranked top-100 candidates overlap GT positions at a rate no better than random, fall back to the template-matching bootstrap (iteration 0) instead.
 
 ### 5. Evaluation
 
-**Detection and localization (same as Tasks 2b/2c):** precision, recall, F4, and mean TP localization distance. Evaluate on the spatially held-out z-slab only; report per annotation-loop iteration to track where marginal return drops off.
+**Same detection metrics as Tasks 2b/2c — tracked per annotation-loop iteration.** Report precision, recall, F4, and mean localization distance on the spatially held-out z-slab after each round of retraining. This makes progress visible and shows when adding more labels stops improving performance — the point at which the annotation loop can stop.
 
-**Candidates reviewed per confirmed positive at fixed recall** — measures annotation efficiency independently of F4. A tool that halves review burden at equivalent recall is preferable to one that only moves the aggregate score.
+**Human review cost per confirmed ribosome.** At a fixed recall level, count how many candidate positions a human must inspect to find one genuine ribosome. This measures whether the candidate-ranking improvements (sections 2 and 4) are actually reducing manual work, not just moving F4. A method that halves review time at the same recall is more useful than one that improves F4 by a few points while reviewing the same number of positions.
 
-**Sub-tomogram averaging (STA) FSC** — extract subtomograms at TP positions, split into two half-sets, compute FSC via EMAN2 (`e2proc3d.py --calcfsc`) or RELION (`relion_postprocess`). FSC-0.143 is the standard resolution criterion. Achievable resolution will be particle-count-limited given the available TP population (at most 56 in the 2c chunk, or up to 202 across the full run 14070 if fine-tuning extends beyond the chunk). The primary value here is qualitative: a clean pick set should produce a recognizable 80S ribosome average, while heavy ferritin-channel contamination would degrade it toward a blurred or chimeric map — a structural sanity check that is independent of the F4 threshold sweep.
+**Visual particle average as a contamination check.** Crop small sub-volumes centred on every detected position and average them together. If the picks are mostly real ribosomes, the average looks like a recognizable ribosome shape. If ferritin detections are contaminating the result — the class confusion identified in Task 2c — the average blurs toward something in between or looks like nothing. This is a low-cost visual check that does not depend on any confidence threshold and directly shows whether failure mode 3 (class confusion) has been resolved.
