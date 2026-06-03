@@ -195,7 +195,7 @@ AUC-PR is the area under the precision–recall curve (trapezoidal rule, anchore
 | ferritin-complex | 46 | 0.461 | 0.856 | 0.69 | 18.9 |
 | beta-amylase | 8 | 0.140 | 0.313 | 0.52 | 26.2 |
 | beta-galactosidase | 10 | 0.278 | 0.462 | 0.68 | 18.1 |
-| **cytosolic-ribosome** | **31** | **0.704** | **0.820** | **0.05** | **25.1** |
+| **cytosolic-ribosome** | **31** | **0.674** | **0.820** | **0.05** | **25.1** |
 | thyroglobulin | 30 | 0.529 | 0.751 | 0.26 | 27.8 |
 | virus-like-capsid | 11 | 1.000 | 1.000 | 0.05 | 20.4 |
 
@@ -240,7 +240,7 @@ python visualize_model_output_2c.py
 
 | Dataset | n_GT | Threshold | TP | FP | FN | Precision | Recall | F4 | Mean TP dist (Å) | AUC-PR |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Synthetic 16463 (2b) | 31 | 0.19 | 26 | 21 | 5 | 0.553 | 0.839 | 0.814 | 24.9 | 0.704 |
+| Synthetic 16463 (2b) | 31 | 0.19 | 26 | 21 | 5 | 0.553 | 0.839 | 0.814 | 24.9 | 0.674 |
 | **In-situ 14070 chunk (2c)** | **56** | **0.19** | **0** | **0** | **56** | **0.000** | **0.000** | **0.000** | — | **0.000** |
 
 The model produces **zero ribosome detections** across the full threshold sweep 0.05–0.70. The maximum ribosome confidence score anywhere in the chunk is **0.0004** — two orders of magnitude below the lowest threshold tested.
@@ -269,10 +269,10 @@ Both datasets are z-score normalised before the model (`NormalizeIntensityd`). T
 | **Raw std (var)** | 18.12 (328.3) | 5.93 × 10⁻⁶ (3.51 × 10⁻¹¹) |
 | **Post z-score mean** (whole-volume) | ≈ 0 (by construction) | ≈ 0 (by construction) |
 | **Post z-score variance** (whole-volume) | ≈ 1 (by construction) | ≈ 1 (by construction) |
-| **Post z-score kurtosis (excess)** | **0.6** | **30.4** |
+| **Post z-score kurtosis (excess)** | **0.7** | **30.4** |
 | **Post z-score skewness** | −0.13 | −3.00 |
 
-Synthetic training data has kurtosis ≈ 30: mostly empty resin background with a few dense, well-separated particles creating extreme negative-tail outliers. The model learned to detect those outlier signatures. The in-situ chunk has kurtosis ≈ 0.6 (essentially Gaussian): crowded cytoplasm fills the volume uniformly, erasing the outlier peaks the model relies on. Every voxel looks like background to the model.
+Synthetic training data has kurtosis ≈ 30: mostly empty resin background with a few dense, well-separated particles creating extreme negative-tail outliers. The model learned to detect those outlier signatures. The in-situ chunk has kurtosis ≈ 0.7 (essentially Gaussian): crowded cytoplasm fills the volume uniformly, erasing the outlier peaks the model relies on. Every voxel looks like background to the model.
 
 ![Domain gap analysis](output/inference_2c/domain_gap_analysis.png)
 
@@ -288,11 +288,11 @@ The model does not fail uniformly across all output channels at ribosome locatio
 | cytosolic-ribosome | ~10⁻⁶ | **~1.0** (correct) |
 | all other classes | ~10⁻⁵–10⁻⁶ | ~10⁻³–10⁻⁴ |
 
-At known ribosome locations in-situ, the ferritin channel produces a response **~60× stronger** than the ribosome channel. The model's blob detector is misfiring onto the wrong class rather than suppressing uniformly. Both ferritin (~120 Å diameter) and ribosome (~300 Å diameter) are compact spherical density blobs — in the sparse synthetic setting the model can distinguish them by size and contrast; in the uniform in-situ cytoplasm the weak residual signal more closely resembles the smaller ferritin signature.
+At known ribosome locations in-situ, the ferritin channel produces a response **~500× stronger** than the ribosome channel (mean max-conf 1.0×10⁻³ vs 2.0×10⁻⁶). The model's blob detector is misfiring onto the wrong class rather than suppressing uniformly. Both ferritin (~120 Å diameter) and ribosome (~300 Å diameter) are compact spherical density blobs — in the sparse synthetic setting the model can distinguish them by size and contrast; in the uniform in-situ cytoplasm the weak residual signal more closely resembles the smaller ferritin signature.
 
 ![Performance summary](output/inference_2c/performance_summary.png)
 
-*Left: Precision–Recall curves for cytosolic-ribosome. Synthetic 16463 achieves a working operating point (F4=0.814 at th=0.19); the in-situ 14070 chunk collapses to a single red ✕ at the origin — zero detections at every threshold from 0.05 to 0.70. Right: mean max confidence of each class at GT ribosome positions. In synthetic (coral) the ribosome bar correctly dominates at ~1.0; in-situ (blue) the ferritin bar leads at ~10⁻³, with ribosome an order of magnitude lower at ~10⁻⁶.*
+*Left: Precision–Recall curves for cytosolic-ribosome. Synthetic 16463 achieves a working operating point (F4=0.814 at th=0.19); the in-situ 14070 chunk collapses to a single red ✕ at the origin — zero detections at every threshold from 0.05 to 0.70. Right: mean max confidence of each class at GT ribosome positions. In synthetic (coral) the ribosome bar correctly dominates at ~1.0; in-situ (blue) the ferritin bar leads at ~10⁻³, with ribosome ~500× lower at ~2×10⁻⁶.*
 
 The figure below shows both particle species in the synthetic volume, confirming they share the same compact-blob appearance. In this low-background setting the model has enough contrast to separate them by size; that contrast disappears entirely in the crowded in-situ cytoplasm.
 
@@ -315,7 +315,7 @@ This is the most direct evidence of the domain gap: the model's ribosome detecto
 | Factor | Synthetic lysate (training) | In-situ Chlamydomonas (test) |
 |---|---|---|
 | Cellular context | Sparse, isolated particles in featureless simulated medium | Crowded cytoplasm; ribosomes in polysomes and on ER membranes |
-| Intensity distribution | Sparse background + extreme outlier peaks; kurtosis ≈ 30 | Dense, near-Gaussian; kurtosis ≈ 0.6 |
+| Intensity distribution | Sparse background + extreme outlier peaks; kurtosis ≈ 30 | Dense, near-Gaussian; kurtosis ≈ 0.7 |
 | Acquisition | Computationally simulated | Real cryo-ET: CTF artefacts, beam-induced motion |
 | Voxel size | 10.012 Å | 7.84 Å |
 | Background complexity | Empty medium | Membranes, organelles, cytoskeletal elements |
@@ -341,7 +341,7 @@ The Task 2c results identify three quantified failure modes; the proposals below
 
 ### Observed failure modes (from Task 2c)
 
-1. **Distribution mismatch** — post-z-score kurtosis 30.4 (synthetic) vs 0.6 (in-situ). The model appears to act as an outlier detector; dense cytoplasm may be erasing the sparse high-contrast signatures it learned on.
+1. **Distribution mismatch** — post-z-score kurtosis 30.4 (synthetic) vs 0.7 (in-situ). The model appears to act as an outlier detector; dense cytoplasm may be erasing the sparse high-contrast signatures it learned on.
 2. **Complete detection collapse** — F4 = 0.000 across all thresholds 0.05–0.70; max ribosome confidence = 0.0004. GT-centred and background patches produce the same ribosome-channel response (max ≈ 0.002–0.16 in both cases).
 3. **Class confusion** — ferritin channel fires ≈60× stronger than ribosome at GT ribosome positions (≈10⁻³ vs ≈10⁻⁶). One likely cause: both are compact blobs and the model may have learned to separate them by contrast rather than size.
 
@@ -353,9 +353,9 @@ The Task 2c results identify three quantified failure modes; the proposals below
 composite = α * synthetic_particle + (1 − α) * insitu_background_crop,  α ~ Uniform(0.7, 1.0)
 ```
 
-In-situ background crops have kurtosis ≈ 0.6 by construction; this targets the distribution gap without re-simulating data. Hard negatives should be sampled from ferritin-channel NMS peaks in the in-situ volume, given the observed class confusion.
+In-situ background crops have kurtosis ≈ 0.7 by construction; this targets the distribution gap without re-simulating data. Hard negatives should be sampled from ferritin-channel NMS peaks in the in-situ volume, given the observed class confusion.
 
-**CTF and missing-wedge augmentation.** The 22% voxel-size difference (10.012 Å → 7.84 Å) and real-acquisition CTF are secondary contributors to the appearance mismatch; the dominant gap is the cytoplasm crowding (kurtosis 30.4 → 0.6), which this augmentation does not address — apply background copy-paste mixing first.
+**CTF and missing-wedge augmentation.** The 22% voxel-size difference (10.012 Å → 7.84 Å) and real-acquisition CTF are secondary contributors to the appearance mismatch; the dominant gap is the cytoplasm crowding (kurtosis 30.4 → 0.7), which this augmentation does not address — apply background copy-paste mixing first.
 
 *Voxel rescaling.* The factor 10.012 / 7.84 = 1.278 is exact given the two known voxel sizes. To produce a 96³ patch at the in-situ apparent resolution, extract a ≈75³ sub-volume from the synthetic tomogram and zoom it by 1.278 (`scipy.ndimage.zoom`); do not zoom an already-96³ patch and crop back, as that discards context voxels.
 
