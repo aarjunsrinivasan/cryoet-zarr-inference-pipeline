@@ -159,11 +159,10 @@ Captures centering accuracy independently of the TP/FP/FN binary decision.
 A model can score high F4 while still placing detections systematically off-
 centre; this metric surfaces that.
 
-**P/R curve + Average Precision (AP)**
+**P/R curve + AUC-PR (Area Under the Precision-Recall Curve)**
 Sweeps thresholds 0.05–0.70 to give a threshold-independent summary of the
-precision–recall trade-off. AP is computed per class so classes with zero
-ground-truth annotations (β-amylase is absent from run 16463) do not inflate
-the aggregate.
+precision–recall trade-off. AUC-PR is computed per class so classes with zero
+ground-truth annotations do not inflate the aggregate.
 
 ### Results — run 16463 (synthetic, in-distribution)
 
@@ -187,18 +186,18 @@ the aggregate.
 
 The sweep-best threshold gains one TP at the cost of 16 extra FPs (ΔF4 = +0.006); the default is preferred.
 
-#### Per-class AP + best-F4 (threshold sweep 0.05–0.70)
+#### Per-class AUC-PR + best-F4 (threshold sweep 0.05–0.70)
 
-AP is the area under the precision–recall curve (trapezoid rule). Values are low because precision stays moderate even at low thresholds (many false positives), compressing the curve area; F4 at the optimal threshold is the more informative operating-point metric.
+AUC-PR is the area under the precision–recall curve (trapezoidal rule, anchored at recall=0, precision=1). F4 at the optimal threshold is the more actionable operating-point metric; AUC-PR summarises the full curve independently of threshold choice.
 
-| Class | n_GT | AP | Best F4 | @ threshold | Mean TP dist (Å) |
+| Class | n_GT | AUC-PR | Best F4 | @ threshold | Mean TP dist (Å) |
 |---|---|---|---|---|---|
-| ferritin-complex | 46 | 0.000 | 0.856 | 0.69 | 18.9 |
-| beta-amylase | 8 | 0.007 | 0.313 | 0.52 | 26.2 |
-| beta-galactosidase | 10 | 0.013 | 0.462 | 0.68 | 18.1 |
-| **cytosolic-ribosome** | **31** | **0.036** | **0.820** | **0.05** | **25.1** |
-| thyroglobulin | 30 | 0.106 | 0.751 | 0.26 | 27.8 |
-| virus-like-capsid | 11 | 0.000 | 1.000 | 0.05 | 20.4 |
+| ferritin-complex | 46 | 0.461 | 0.856 | 0.69 | 18.9 |
+| beta-amylase | 8 | 0.140 | 0.313 | 0.52 | 26.2 |
+| beta-galactosidase | 10 | 0.278 | 0.462 | 0.68 | 18.1 |
+| **cytosolic-ribosome** | **31** | **0.704** | **0.820** | **0.05** | **25.1** |
+| thyroglobulin | 30 | 0.529 | 0.751 | 0.26 | 27.8 |
+| virus-like-capsid | 11 | 1.000 | 1.000 | 0.05 | 20.4 |
 
 ### Output files
 
@@ -239,9 +238,9 @@ python visualize_model_output_2c.py
 
 #### Direct comparison: cytosolic-ribosome
 
-| Dataset | n_GT | Threshold | TP | FP | FN | Precision | Recall | F4 | Mean TP dist (Å) | AP |
+| Dataset | n_GT | Threshold | TP | FP | FN | Precision | Recall | F4 | Mean TP dist (Å) | AUC-PR |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Synthetic 16463 (2b) | 31 | 0.19 | 26 | 21 | 5 | 0.553 | 0.839 | 0.814 | 24.9 | 0.036 |
+| Synthetic 16463 (2b) | 31 | 0.19 | 26 | 21 | 5 | 0.553 | 0.839 | 0.814 | 24.9 | 0.704 |
 | **In-situ 14070 chunk (2c)** | **56** | **0.19** | **0** | **0** | **56** | **0.000** | **0.000** | **0.000** | — | **0.000** |
 
 The model produces **zero ribosome detections** across the full threshold sweep 0.05–0.70. The maximum ribosome confidence score anywhere in the chunk is **0.0004** — two orders of magnitude below the lowest threshold tested.
@@ -356,7 +355,13 @@ composite = α * synthetic_particle + (1 − α) * insitu_background_crop,  α ~
 
 In-situ background crops have kurtosis ≈ 0.6 by construction; this targets the distribution gap without re-simulating data. Hard negatives should be sampled from ferritin-channel NMS peaks in the in-situ volume, given the observed class confusion.
 
-**CTF and missing-wedge augmentation.** The 22% voxel-size difference (10.012 Å → 7.84 Å) and real-acquisition CTF may contribute to the appearance mismatch. Rescale synthetic crops by factor 1.278 (`scipy.ndimage.zoom`). Apply a ±30° missing-wedge mask in Fourier space (`torch.fft.fftn` → zero wedge → `torch.fft.ifftn`). For CTF, [Parakeet](https://github.com/rosalindfranklininstitute/parakeet) can regenerate synthetic volumes with defocus and dose parameters estimated from the real acquisition.
+**CTF and missing-wedge augmentation.** The 22% voxel-size difference (10.012 Å → 7.84 Å) and real-acquisition CTF are secondary contributors to the appearance mismatch; the dominant gap is the cytoplasm crowding (kurtosis 30.4 → 0.6), which this augmentation does not address — apply background copy-paste mixing first.
+
+*Voxel rescaling.* The factor 10.012 / 7.84 = 1.278 is exact given the two known voxel sizes. To produce a 96³ patch at the in-situ apparent resolution, extract a ≈75³ sub-volume from the synthetic tomogram and zoom it by 1.278 (`scipy.ndimage.zoom`); do not zoom an already-96³ patch and crop back, as that discards context voxels.
+
+*Missing-wedge mask.* Apply a wedge-shaped zero mask in Fourier space (`torch.fft.fftn` → zero wedge → `torch.fft.ifftn`). The half-angle of the missing wedge is dataset-specific and must be read from the 14070 tilt series metadata (STAR or MDOC file): `half_angle = 90° − max_tilt`. A ±30° wedge corresponds to a ±60° maximum tilt, which is a common acquisition range, but this should be verified before use rather than assumed.
+
+*CTF simulation.* [Parakeet](https://github.com/rosalindfranklininstitute/parakeet) can simulate CTF on synthetic sub-volumes. It requires the defocus value and electron dose for each tilt image in the 14070 series; these are not present in the downloaded data and would need to be fetched from the associated tilt series files or the EMDB deposition.
 
 ### 2. Fine-tune on a small human-reviewed in-situ set
 
@@ -376,14 +381,14 @@ The in-situ input ("wbp-denoised-ctfdeconv") has already been denoised, but the 
 - **CryoCARE** ([github.com/juglab/cryoCARE_pip](https://github.com/juglab/cryoCARE_pip)): Noise2Noise, requires even/odd frame reconstructions (`MotionCor2 -SplitSum 1`).
 - **IsoNet** ([github.com/IsoNet-cryoET/IsoNet](https://github.com/IsoNet-cryoET/IsoNet)): self-supervised on already-reconstructed tomograms, reported to improve picking on in-situ cellular data (Liu et al., Nature Comms 2022). Note: missing-wedge infilling may introduce hallucinations — use for picking only, not structure determination.
 
-### 4. CryoSiam-assisted candidate prioritization
+### 4. Self-supervised subtomogram embedding for candidate prioritization
 
 [CryoSiam](https://github.com/frosinastojanovska/cryosiam) provides self-supervised subtomogram embeddings without particle labels. After TopCUP inference yields 1,209 NMS candidates all below confidence 0.002 and spatially uncorrelated with GT, extract embeddings at each candidate position and cluster them. Clusters most similar in embedding space to GT-confirmed ribosomes from run 16463 are prioritised for human review, reducing the annotation burden per verified positive.
 
 ### 5. Evaluation
 
-**Detection and localization (same as Tasks 2b/2c):** precision, recall, F4 at operating threshold, best-F4 over sweep 0.05–0.70, mean TP localization distance (Å). Evaluated on spatially held-out z-slab labels only. Report per annotation-loop iteration to track marginal return.
+**Detection and localization (same as Tasks 2b/2c):** precision, recall, F4, and mean TP localization distance. Evaluate on the spatially held-out z-slab only; report per annotation-loop iteration to track where marginal return drops off.
 
-**Candidates per chunk at fixed recall** — measures annotation efficiency: a useful tool should reduce candidates/TP, not just improve aggregate F4.
+**Candidates reviewed per confirmed positive at fixed recall** — measures annotation efficiency independently of F4. A tool that halves review burden at equivalent recall is preferable to one that only moves the aggregate score.
 
-**Sub-tomogram averaging (STA) FSC** — take TP detections → extract subtomograms → compute FSC between two half-sets via EMAN2 (`e2proc3d.py --calcfsc`) or RELION-5 (`relion_postprocess`). With 202 GT ribosomes in run 14070, benchmarks suggest FSC-0.143 ≈ 15–20 Å is achievable (DeepETPicker, Nature Comms 2024, uses this as a picker comparison metric). Crucially, a pick set contaminated by ferritin-channel false positives would produce an averaged map resembling ferritin (~120 Å diameter) rather than the 80S ribosome, providing a qualitative structural sanity check independent of the F4 threshold sweep.
+**Sub-tomogram averaging (STA) FSC** — extract subtomograms at TP positions, split into two half-sets, compute FSC via EMAN2 (`e2proc3d.py --calcfsc`) or RELION (`relion_postprocess`). FSC-0.143 is the standard resolution criterion. Achievable resolution will be particle-count-limited given the available TP population (at most 56 in the 2c chunk, or up to 202 across the full run 14070 if fine-tuning extends beyond the chunk). The primary value here is qualitative: a clean pick set should produce a recognizable 80S ribosome average, while heavy ferritin-channel contamination would degrade it toward a blurred or chimeric map — a structural sanity check that is independent of the F4 threshold sweep.

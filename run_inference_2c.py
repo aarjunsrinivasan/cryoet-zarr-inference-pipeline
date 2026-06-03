@@ -357,7 +357,7 @@ def main():
     print(f"  Precision={best['precision']:.3f}  Recall={best['recall']:.3f}  "
           f"F{BETA}={best[f'f{BETA}']:.3f}  avg_dist={best['avg_tp_dist_A']:.1f} Å")
     print(f"  TP/FP/FN: {int(best.tp)}/{int(best.fp)}/{int(best.fn)}")
-    print(f"\nAP: {ap:.3f}")
+    print(f"\nAUC-PR: {ap:.3f}")
 
     # ── Step 7: side-by-side comparison with Task 2b ───────────────────────
     print("\n" + "=" * 65)
@@ -373,7 +373,7 @@ def main():
         "avg_dist_default": ribo_default["avg_tp_dist_A"],
         f"best_f{BETA}": best[f"f{BETA}"],
         "best_threshold": best["threshold"],
-        "AP": ap,
+        "AUC-PR": ap,
     }
 
     if results_2b_csv.exists():
@@ -389,7 +389,7 @@ def main():
                 "avg_dist_default": r2b.avg_tp_dist_A,
                 f"best_f{BETA}": "—",
                 "best_threshold": r2b.threshold,
-                "AP": "—",
+                "AUC-PR": "—",
             }
             print(pd.DataFrame([ribo_2b, ribo_2c]).set_index("dataset").to_string())
         else:

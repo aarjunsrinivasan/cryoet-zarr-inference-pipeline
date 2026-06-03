@@ -239,18 +239,18 @@ def main():
     print(f"  F{BETA}:          {best[f'f{BETA}']:.3f}")
     print(f"  TP dist (mean): {best['avg_tp_dist_A']:.1f} Å")
     print(f"  TP/FP/FN:       {int(best['tp'])}/{int(best['fp'])}/{int(best['fn'])}")
-    print(f"\nAverage Precision (AP): {ap:.3f}")
+    print(f"\nAUC-PR: {ap:.3f}")
 
-    # ── Step 6: all-class AP summary ──────────────────────────────────────
+    # ── Step 6: all-class AUC-PR summary ──────────────────────────────────
     print("\n" + "=" * 65)
-    print("Step 5: Per-class AP summary")
+    print("Step 5: Per-class AUC-PR summary")
     print("=" * 65)
     for ptype, radius in PARTICLE_RADII.items():
         curve  = precision_recall_curve(pred_df, gt_df, ptype,
                                         radius * EVAL_RADIUS_MULT, thresholds)
         ap_i   = average_precision(curve)
         best_i = curve.loc[curve[f"f{BETA}"].idxmax()]
-        print(f"  {ptype:<22s}  AP={ap_i:.3f}  "
+        print(f"  {ptype:<22s}  AUC-PR={ap_i:.3f}  "
               f"best-F{BETA}={best_i[f'f{BETA}']:.3f} @ th={best_i['threshold']:.2f}  "
               f"avg_dist={best_i['avg_tp_dist_A']:.1f} Å")
 

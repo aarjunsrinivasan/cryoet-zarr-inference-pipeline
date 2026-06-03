@@ -85,4 +85,9 @@ def precision_recall_curve(
 
 def average_precision(pr_df: pd.DataFrame) -> float:
     pr = pr_df.sort_values("recall")
+    # Anchor at (recall=0, precision=1): standard PR curve convention.
+    # Without this, any class whose recall is already saturated at the minimum
+    # threshold produces a zero-width trapezoid and reports AUC-PR = 0.
+    anchor = pd.DataFrame([{"recall": 0.0, "precision": 1.0}])
+    pr = pd.concat([anchor, pr], ignore_index=True).sort_values("recall")
     return float(np.trapezoid(pr["precision"], pr["recall"]))
