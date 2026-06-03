@@ -343,7 +343,7 @@ The Task 2c results identify three quantified failure modes; the proposals below
 
 1. **Distribution mismatch** — post-z-score kurtosis 30.4 (synthetic) vs 0.7 (in-situ). The model appears to act as an outlier detector; dense cytoplasm may be erasing the sparse high-contrast signatures it learned on.
 2. **Complete detection collapse** — F4 = 0.000 across all thresholds 0.05–0.70; max ribosome confidence = 0.0004. GT-centred and background patches produce the same ribosome-channel response (max ≈ 0.002–0.16 in both cases).
-3. **Class confusion** — ferritin channel fires ≈60× stronger than ribosome at GT ribosome positions (≈10⁻³ vs ≈10⁻⁶). One likely cause: both are compact blobs and the model may have learned to separate them by contrast rather than size.
+3. **Class confusion** — ferritin channel fires ≈500× stronger than ribosome at GT ribosome positions (≈10⁻³ vs ≈2×10⁻⁶). One likely cause: both are compact blobs and the model may have learned to separate them by contrast rather than size.
 
 ### 1. Augment synthetic training toward the in-situ regime
 
