@@ -83,12 +83,12 @@ This ordering was confirmed empirically via cross-evaluation during Task 2b deve
 ```bash
 python run_inference_2b.py \
   --copick-config  data/copick_config_fs.json \
-  --output-dir     output/inference_2b_batch \
+  --output-dir     output/inference_2b \
   --checkpoint-dir checkpoints \
   --run-id         16463 \
   --pixelsize      10.012 \
   --tomo-type      wbp-denoised-denoiset-ctfdeconv \
-  --batch-size     4        # increase for faster GPU inference; default 1
+  --batch-size     1        # increase for faster GPU inference; default 1
 ```
 
 The checkpoint (`topcup_phantom_24_tomograms.ckpt`) is downloaded automatically
@@ -275,7 +275,4 @@ Synthetic training data has kurtosis ≈ 30: mostly empty resin background with 
 | `output/inference_2c/results_default_threshold.csv` | Ribosome metrics at default threshold (0.19) |
 | `output/inference_2c/ribosome_pr_curve.csv` | Full P/R curve sweep 0.05–0.70 |
 | `output/inference_2c/domain_gap_analysis.png` | 4-panel: in-situ raw intensity (own scale, mean/std in title), synthetic raw intensity (own scale), z-score normalised overlay (log), per-class max confidence with ribosome annotated |
-<<<<<<< HEAD
-| `output/inference_2c/slice_comparison.png` | XY slices at ribosome-richest z-depths (all panels guaranteed ≥1 ribosome visible) with GT overlays — in-situ vs synthetic |
-=======
 | `output/inference_2c/slice_comparison.png` | XY slices at ribosome-richest z-depths (all panels guaranteed ≥1 ribosome visible) with GT overlays — in-situ vs synthetic |
