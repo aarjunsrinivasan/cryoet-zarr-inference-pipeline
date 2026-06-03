@@ -29,6 +29,29 @@ To use the official GPU build instead:
 uv pip install topcup
 ```
 
+## 4. Install matplotlib
+
+```bash
+uv pip install matplotlib
+```
+
+`matplotlib` is used by the figure scripts and is not pulled in by TopCUP.
+
+## 5. End-to-end run
+
+Two convenience scripts run all tasks in order:
+
+```bash
+./run_all.sh          # GPU machine — runs full inference
+./run_cpu_test.sh     # CPU / no-GPU test — sets CUDA_VISIBLE_DEVICES="" so torch falls back to CPU
+```
+
+Both scripts handle setup (uv, venv, packages) with skip-if-already-done guards and then execute Tasks 2a → 2b → 2c in sequence.
+
+**Output behaviour:** raw predictions (`val_pred_df_seed.csv`) are skipped if already present; metric CSVs and figures are always regenerated and will overwrite any saved copies. To force a full re-run from scratch, delete `output/` before running.
+
+**Custom paths:** each task script accepts `--output-dir`, `--copick-config`, `--checkpoint-dir`, and other flags — run `python <script>.py --help` to see all options.
+
 ---
 
 ## Task 2a — Data Download
